@@ -230,6 +230,11 @@ app.post("/placeOrder" , async (req,res) => {
 
     let {orderItems , username , totalAmount} = req.body 
     
+
+    let orderItemQuery = 
+    "INSERT INTO `order_item` (`productId`, `itemId`, `orderId`, `sku`, `price`, `discount`, `quantity`, `createdAt`, `updatedAt`, `content`) VALUES " +
+    "(?, ?, ?, 'IPHONE13BLK', ? , 00, ? , NOW(), NOW(), ?)"
+
     let orderQuery = 
     "INSERT INTO `order` (`userId`, `type`, `status`, `subTotal`, `itemDiscount`, `tax`, `shipping`, `total`, `promo`, `discount`, `grandTotal`, `createdAt`, `updatedAt`, `content`)"
     +
@@ -240,13 +245,27 @@ app.post("/placeOrder" , async (req,res) => {
         let userId = user[0]['id']
         
         let result = await db.query( orderQuery , [userId , totalAmount , totalAmount , totalAmount , userId] )
-        console.log(result)
-        res.send("balls")
+        let orderID = result[0]['insertId']
+        console.log("orderID : " , orderID)
+
+        for ( let order of orderItems )
+        {
+            await db.query( orderItemQuery , [order.productId , order.itemId , orderID , order.price , order.quantity , order.title ] )
+        }
+
+
+        res.status(200).json({
+            ok : true , 
+            orderID
+        })
     }
     catch(err)
     {
         console.log(err)
-        res.send("cock & balls torture")
+        res.status(400).json({
+            ok : false , 
+            message : err.message
+        })
     }
 
 
