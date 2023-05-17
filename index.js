@@ -12,7 +12,10 @@ const db = mysql.createPool({
 })
 
 //enable cross origin resource sharing
-app.use(cors())
+app.use(cors({
+    origin : ["http://localhost:3000"] ,
+    credentials : true 
+}))
 
 //parse json
 app.use(express.json())
@@ -43,7 +46,7 @@ app.get( "/getUsernameAndID" , (req,res) => {
 })
 
 app.get("/dashboardStats", async (req, res) => {
-    console.log("bussin");
+
     let monthlyOrders = 0;
     let totalSale = 0;
     let ordersDelivered = 0;
@@ -89,8 +92,8 @@ app.get("/graphStats" , async ( req , res ) => {
         let currentMonth = new Date().getMonth()
         for ( let order of orders )
         {
-            if ( currentMonth + 1 == order.createdAt)
-            monthlyOrders[currentMonth]++ , monthlySales[currentMonth] += order.grandTotal
+            //if ( currentMonth + 1 == order.createdAt)
+            monthlyOrders[order.createdAt-1]++ , monthlySales[order.createdAt-1] += parseInt(order.grandTotal)
         }
 
         return res.status(200).json({
@@ -115,7 +118,7 @@ app.get("/getPendingOrders" , async ( req , res ) => {
 
         let [pendingOrders] =
         await db.query("Select `order`.id  , firstName , mobile , userID , status , grandTotal from `order` inner join `user` on userID = `user`.id where status = \"pending\"  " )
-        console.log(pendingOrders)
+        
         return res.status(200).json({
             ok: true,
             data : pendingOrders
@@ -129,6 +132,35 @@ app.get("/getPendingOrders" , async ( req , res ) => {
     }
   
 
+
+})
+
+app.get("/user/getOrders/:id" , async ( req , res ) => {
+
+    try{
+        const {id} = req.params 
+        console.log("user id: " , id )
+        let query = " select * from `order` where userId = ? " ;
+
+        let [ result ] = await db.query( query , [ id ] )
+        return res.status(200).json({
+
+            ok : true ,
+            data : result
+
+        })
+
+    }
+    catch( error )
+    {
+        return res.status(404).json({
+
+            ok : false ,
+            data : [] ,
+            error
+
+        })
+    }
 
 })
 
@@ -226,6 +258,26 @@ app.get("/getItems" , async (req , res) => {
 
 })
 
+app.get("/getBrands" , async ( req , res ) => {
+    try{
+        let [brands] = await db.query("select * from brand ")
+
+        res.status(200).json({
+            ok : true , 
+            data : brands
+        })
+
+    }
+    catch(err)
+    {
+        res.status(400).json({
+            ok : false , 
+            error : err.message
+        })
+    }
+})
+
+
 app.post("/placeOrder" , async (req,res) => {
 
     let {orderItems , username , totalAmount} = req.body 
@@ -268,6 +320,72 @@ app.post("/placeOrder" , async (req,res) => {
         })
     }
 
+
+})
+
+app.post("/createProduct" , async ( req , res ) => {
+
+    try{
+
+        let { title ,mrp ,salePrice ,sku ,summary ,selectedBrand ,selectedSupplier ,quantity } = req.body
+        let productQuery = "INSERT INTO `product` (`title`, `summary`, `type`, `createdAt`, `updatedAt`, `content`) VALUES ( ? , ? , '2' , now() , now() , 'This is content' ) "
+        let [ product ] = await db.query( productQuery , [ title , summary ] )
+
+        let newProductID = product['insertId']
+        console.log( product )
+
+        let itemQuery = "INSERT INTO `item` (`productId`, `brandId`, `supplierId`, `orderId`, `sku`, `mrp`, `discount`, `price`, `quantity`, `sold`, `available`, `defective`, `createdBy`, `updatedBy`, `createdAt`, `updatedAt`) VALUES ( ? , ? , ? , 1 , ? , ? , 0 , ? , ? , 0 , ? , 1 , 1 , 1 , now() , now() ) "
+
+        let [item] = await db.query( itemQuery , [newProductID , selectedBrand , selectedSupplier , sku , mrp , salePrice , quantity , quantity] )
+        console.log(item)
+        return res.status(200).json({
+            ok : true 
+        })
+    }
+    catch(error)
+    {   
+        console.log(error)
+        return res.status(400).json({
+            ok : false ,
+            error
+        })
+    }
+
+})
+
+app.post( "/login" , async ( req , res ) => {
+
+    try{
+        let { email , password } = req.body 
+
+        let query = "select * from `user` where email = ? and passwordHash = ? " 
+
+        let [ result ] = await db.query( query , [ email , password ] )
+        
+        if ( result.length === 0 )
+        return res.status(404).json({
+            data : {} ,
+            ok : false ,
+            message : "No user found"
+        })
+
+        console.log( "log in  :" ,result )
+
+        return res.status(200).json({
+            ok : true ,
+            data : result[0]
+        })
+
+    }
+    catch(error)
+    {
+        console.log(error)
+        return res.status(400).json({
+            error ,
+            ok : false ,
+            message : "Could not log in"
+        })
+    }
 
 })
 
